@@ -81,9 +81,13 @@ export async function bookingSummary(id: string, token?: string | null) {
     locationKind: String(r["location_kind"]),
   };
   const storedToken = r["booking_token"] ? String(r["booking_token"]) : null;
-  const tokenOk =
-    !!token && !!storedToken && token.length === storedToken.length &&
-    (await import("node:crypto")).timingSafeEqual(Buffer.from(token), Buffer.from(storedToken));
+  // Constant-time vergelijking zonder node:crypto (workerd-compatibel).
+  let tokenOk = false;
+  if (token && storedToken && token.length === storedToken.length) {
+    let diff = 0;
+    for (let i = 0; i < token.length; i++) diff |= token.charCodeAt(i) ^ storedToken.charCodeAt(i);
+    tokenOk = diff === 0;
+  }
   if (!tokenOk) {
     // Gemaskerde publieke status-check: geen gast-PII, geen locatie.
     return { ...base, guestName: null, guestTimezone: null, locationValue: null, masked: true as const };
