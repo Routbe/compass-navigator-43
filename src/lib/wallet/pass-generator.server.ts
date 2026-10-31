@@ -18,23 +18,59 @@ export type PassResult =
   | { kind: "demo"; wallet: "apple" | "google"; payload: unknown }
   | { kind: "not_found" };
 
+/**
+ * Canonical origin for pass content and assets. The request's `url.origin` is
+ * untrusted (Host header), so passes always point at the configured site
+ * origin — `NEXT_PUBLIC_APP_URL` via canonicalAppUrl(), falling back to
+ * https://rout.be — never at whatever host the request arrived on.
+ */
+function walletOrigin(): string {
+  const configured = process.env["WALLET_ASSET_ORIGIN"]?.trim();
+  if (configured && /^https:\/\/[a-z0-9.-]+(?::\d+)?$/i.test(configured)) return configured;
+  return canonicalAppUrl();
+}
+
 export async function loadWalletSubject(kind: WalletKind, id: string, origin: string): Promise<WalletSubject | null> {
+  const base = walletOrigin();
+  void origin; // untrusted request origin — never used for pass content
   if (kind === "profile") {
     const { readPublicProfile } = await import("@/lib/studio-profile.server");
     const p = (await readPublicProfile(id)) as Record<string, unknown> | null;
     if (!p) return null;
     const handle = String(p["username"] ?? id);
-    return { kind, id: handle, title: String(p["display_name"] || `@${handle}`), subtitle: `@${handle}`, url: `${origin}/${encodeURIComponent(handle)}` };
+    return { kind, id: handle, title: String(p["display_name"] || `@${handle}`), subtitle: `@${handle}`, url: `${base}/${encodeURIComponent(handle)}` };
   }
   const { readPublicEvents } = await import("@/lib/event-engine.server");
   const e = (await readPublicEvents(id, null, null))[0];
   if (!e) return null;
   const when = new Date(e.startsAt).toLocaleString("nl-BE", { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/Brussels" });
-  return { kind, id: e.slug, title: e.title, subtitle: when, url: `${origin}/event/${encodeURIComponent(e.slug)}`, startsAt: e.startsAt, venue: e.venue || null };
+  // A barcode is an access claim: only a proven paid or verified booking
+  // (booking_requests / creator_donations) may put one on the pass.
+  const accessClaim = await eventHasVerifiedAccess(e.slug);
+  return { kind, id: e.slug, title: e.title, subtitle: when, url: `${base}/event/${encodeURIComponent(e.slug)}`, startsAt: e.startsAt, venue: e.venue || null, accessClaim };
+}
+
+/** True only when the event has a paid/verified booking on record. Fails closed. */
+async function eventHasVerifiedAccess(eventSlug: string): Promise<boolean> {
+  try {
+    const { sql } = await import("@/lib/neon");
+    const rows = (await sql`
+      select 1 from public.profile_events pe
+      where pe.slug = ${eventSlug}
+        and exists (
+          select 1 from public.booking_requests br
+          where br.profile_id = pe.profile_id and br.status in ('paid', 'verified', 'confirmed')
+        )
+      limit 1`) as Record<string, unknown>[];
+    return rows.length > 0;
+  } catch {
+    return false;
+  }
 }
 
 export async function generatePass(kind: WalletKind, id: string, wallet: "apple" | "google", origin: string): Promise<PassResult> {
   const subject = await loadWalletSubject(kind, id, origin);
+  const assetOrigin = walletOrigin();
   if (!subject) return { kind: "not_found" };
   const env = process.env as Record<string, string | undefined>;
 
