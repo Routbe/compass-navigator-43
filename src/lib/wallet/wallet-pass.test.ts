@@ -13,17 +13,33 @@ describe("wallet passes", () => {
     expect(walletSerial(event)).toBe("event-summer-fest-");
     expect(walletSerial({ kind: "profile", id: "summer" })).not.toBe(walletSerial({ kind: "event", id: "summer" }));
   });
-  it("Apple pass carries the page link as QR code and the event date", () => {
+  it("Apple event pass without proven booking is informational and has no barcode", () => {
     const p = applePassJson(event, { passTypeId: "pass.be.rout", teamId: "TEAM" });
-    expect(p.barcodes[0]!.message).toBe("https://rout.be/event/summer");
+    expect("barcodes" in p).toBe(false);
+    expect(p.generic.primaryFields[0]!.label).toBe("INFORMATIEF");
     expect(p.relevantDate).toBe("2026-08-01T18:00:00Z");
     expect(p.passTypeIdentifier).toBe("pass.be.rout");
   });
+  it("Apple event pass with a verified booking carries the QR access claim", () => {
+    const p = applePassJson({ ...event, accessClaim: true }, { passTypeId: "pass.be.rout", teamId: "TEAM" });
+    expect(p.barcodes?.[0]!.message).toBe("https://rout.be/event/summer");
+    expect(p.generic.primaryFields[0]!.label).toBe("EVENEMENT");
+  });
+  it("Profile passes always keep their business-card barcode", () => {
+    const p = applePassJson({ kind: "profile", id: "jona", title: "Jona", subtitle: "@jona", url: "https://rout.be/jona" }, { passTypeId: "pass.be.rout", teamId: "TEAM" });
+    expect(p.barcodes?.[0]!.message).toBe("https://rout.be/jona");
+  });
   it("Google pass is bound to the issuer and our own origin", () => {
-    const c = googleSaveClaims(event, { issuerId: "338", serviceAccountEmail: "sa@x.iam", origins: ["https://rout.be"] });
+    const c = googleSaveClaims({ ...event, accessClaim: true }, { issuerId: "338", serviceAccountEmail: "sa@x.iam", origins: ["https://rout.be"] });
     expect(c.payload.genericObjects[0]!.id.startsWith("338.")).toBe(true);
-    expect(c.payload.genericObjects[0]!.barcode.value).toBe("https://rout.be/event/summer");
+    expect(c.payload.genericObjects[0]!.barcode?.value).toBe("https://rout.be/event/summer");
     expect(c.origins).toEqual(["https://rout.be"]);
+  });
+  it("Google event pass without proven booking is informational and barcodeless", () => {
+    const c = googleSaveClaims(event, { issuerId: "338", serviceAccountEmail: "sa@x.iam", origins: ["https://rout.be"] });
+    const obj = c.payload.genericObjects[0]!;
+    expect("barcode" in obj).toBe(false);
+    expect(obj.subheader.defaultValue.value).toBe("Informatief");
   });
 });
 
