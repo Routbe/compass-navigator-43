@@ -15,6 +15,11 @@ export type WalletSubject = {
   /** ISO start time (events only). */
   startsAt?: string | null;
   venue?: string | null;
+  /**
+   * Events only: true when a paid or verified booking proves access. Without
+   * it the pass is informational and carries no barcode or access claim.
+   */
+  accessClaim?: boolean;
 };
 
 export type WalletStatus = { apple: boolean; google: boolean };
@@ -87,9 +92,13 @@ export function applePassJson(s: WalletSubject, cfg: { passTypeId: string; teamI
     backgroundColor: "rgb(17, 17, 17)",
     labelColor: "rgb(180, 180, 180)",
     ...(isEvent && s.startsAt ? { relevantDate: s.startsAt } : {}),
-    barcodes: [{ format: "PKBarcodeFormatQR", message: s.url, messageEncoding: "iso-8859-1", altText: clip(s.url.replace(/^https?:\/\//, ""), 60) }],
+    // Barcode = toegangsclaim: bij events alleen met een bewezen betaalde of
+    // geverifieerde boeking. Informatieve passes krijgen geen barcode.
+    ...(!isEvent || s.accessClaim === true
+      ? { barcodes: [{ format: "PKBarcodeFormatQR", message: s.url, messageEncoding: "iso-8859-1", altText: clip(s.url.replace(/^https?:\/\//, ""), 60) }] }
+      : {}),
     generic: {
-      primaryFields: [{ key: "title", label: isEvent ? "EVENEMENT" : "PROFIEL", value: clip(s.title, 60) }],
+      primaryFields: [{ key: "title", label: isEvent ? (s.accessClaim === true ? "EVENEMENT" : "INFORMATIEF") : "PROFIEL", value: clip(s.title, 60) }],
       secondaryFields: [{ key: "subtitle", label: isEvent ? "WANNEER" : "HANDLE", value: clip(s.subtitle, 60) }],
       ...(isEvent && s.venue ? { auxiliaryFields: [{ key: "venue", label: "LOCATIE", value: clip(s.venue, 60) }] } : {}),
       backFields: [{ key: "link", label: "Link", value: s.url }],
