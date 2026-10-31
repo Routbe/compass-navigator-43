@@ -61,19 +61,47 @@ export async function publicSlots(id: string, now = new Date()): Promise<string[
   return bookableStarts(filled, rules, now).map((d) => d.toISOString());
 }
 
-/** Confirmation view: the booking id (random UUID) is the capability; returns only what the guest submitted. */
-export async function bookingSummary(id: string) {
-  const rows = (await sql`select b.id, b.status, b.start_utc, b.end_utc, b.guest_name, b.guest_timezone, t.title, t.location_kind,
+/**
+ * Confirmation view. The booking id alone is NOT a capability (db/0144):
+ * guest PII is only returned with the high-entropy `booking_token` that the
+ * guest receives after booking. Without a valid token the response is masked:
+ * status/times/title only, never guest name, timezone or location.
+ */
+export async function bookingSummary(id: string, token?: string | null) {
+  const rows = (await sql`select b.id, b.status, b.start_utc, b.end_utc, b.guest_name, b.guest_timezone,
+      b.booking_token, t.title, t.location_kind,
       case when b.status = 'confirmed' then t.location_value end as location_value
     from public.bookings b join public.booking_event_types t on t.id = b.event_type_id where b.id = ${id}::uuid`) as Record<string, unknown>[];
   const r = rows[0];
   if (!r) return null;
+  const base = {
+    id: String(r["id"]), status: String(r["status"]), title: String(r["title"]),
+    startUtc: new Date(String(r["start_utc"])).toISOString(),
+    endUtc: new Date(String(r["end_utc"])).toISOString(),
+    locationKind: String(r["location_kind"]),
+  };
+  const storedToken = r["booking_token"] ? String(r["booking_token"]) : null;
+  const tokenOk =
+    !!token && !!storedToken && token.length === storedToken.length &&
+    (await import("node:crypto")).timingSafeEqual(Buffer.from(token), Buffer.from(storedToken));
+  if (!tokenOk) {
+    // Gemaskerde publieke status-check: geen gast-PII, geen locatie.
+    return { ...base, guestName: null, guestTimezone: null, locationValue: null, masked: true as const };
+  }
   return {
-    id: String(r["id"]), status: String(r["status"]), title: String(r["title"]), guestName: String(r["guest_name"]),
-    guestTimezone: String(r["guest_timezone"]), startUtc: new Date(String(r["start_utc"])).toISOString(),
-    endUtc: new Date(String(r["end_utc"])).toISOString(), locationKind: String(r["location_kind"]),
+    ...base, masked: false as const,
+    guestName: String(r["guest_name"]),
+    guestTimezone: String(r["guest_timezone"]),
     locationValue: r["location_value"] ? String(r["location_value"]) : null,
   };
+}
+
+/** Het gasttoken van een zojuist aangemaakte boeking (alleen direct na insert). */
+export async function bookingTokenFor(id: string): Promise<string | null> {
+  const rows = (await sql`select booking_token from public.bookings where id = ${id}::uuid`) as {
+    booking_token: string | null;
+  }[];
+  return rows[0]?.booking_token ?? null;
 }
 
 /** Lazy fallback: recompute hosts whose cache is missing or older than 5 minutes, bounded so a page stays fast. */
