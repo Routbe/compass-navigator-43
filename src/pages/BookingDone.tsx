@@ -7,12 +7,12 @@ import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n";
 import { getBookingSummary } from "@/lib/booking-engine/booking.functions";
 
-export default function BookingDone({ bookingId, paid }: { bookingId: string; paid: boolean }) {
+export default function BookingDone({ bookingId, paid, token }: { bookingId: string; paid: boolean; token?: string }) {
   const { t, locale } = useI18n();
   const get = useServerFn(getBookingSummary);
   const q = useQuery({
-    queryKey: ["booking-summary", bookingId],
-    queryFn: () => get({ data: { id: bookingId } }),
+    queryKey: ["booking-summary", bookingId, token],
+    queryFn: () => get({ data: { id: bookingId, token } }),
     // After Stripe, the webhook may land a moment later: poll briefly while payment is pending.
     refetchInterval: (query) => (query.state.data?.status === "pending_payment" ? 3000 : false),
   });
