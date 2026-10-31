@@ -243,6 +243,7 @@ async function registerApp(instance: string, redirectUri: string): Promise<AppCr
   }
   const creds = { clientId: json.client_id, clientSecret: json.client_secret };
   appCache.set(cacheKey, creds);
+  void writeRegistrationCache(cacheKey, creds);
   return creds;
 }
 
