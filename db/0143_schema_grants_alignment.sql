@@ -28,12 +28,12 @@ begin
     if to_regclass('public.' || t) is not null then
       execute format('alter table public.%I enable row level security', t);
       -- Lees/schrijfrechten voor de applicatierol blijven onder RLS vallen.
-      execute format('grant select, insert, update, delete on public.%I to neon_auth', t);
+      execute format('grant select, insert, update, delete on public.%I to rout_app', t);
     end if;
   end loop;
 end $$;
 
--- Server-only tabellen: expliciet géén grants voor de authenticator-rol.
+-- Server-only tabellen: expliciet géén grants voor de applicatierol.
 do $$
 declare
   t text;
@@ -44,7 +44,7 @@ declare
 begin
   foreach t in array server_only loop
     if to_regclass('public.' || t) is not null then
-      execute format('revoke all on public.%I from neon_auth', t);
+      execute format('revoke all on public.%I from rout_app', t);
     end if;
   end loop;
 end $$;
@@ -59,6 +59,6 @@ begin
       from information_schema.sequences
      where sequence_schema = 'public'
   loop
-    execute format('grant usage, select on sequence public.%I to neon_auth', s.sequence_name);
+    execute format('grant usage, select on sequence public.%I to rout_app', s.sequence_name);
   end loop;
 end $$;
