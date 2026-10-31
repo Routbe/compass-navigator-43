@@ -3,6 +3,7 @@
  * Reads public data only (same visibility rules as the public pages). Without
  * certificates it returns an unsigned demo payload instead of failing.
  */
+import { canonicalAppUrl } from "@/lib/app-url";
 import {
   appleWalletConfig,
   applePassJson,
@@ -76,14 +77,14 @@ export async function generatePass(kind: WalletKind, id: string, wallet: "apple"
 
   if (wallet === "google") {
     const cfg = googleWalletConfig(env);
-    if (!cfg) return { kind: "demo", wallet, payload: googleSaveClaims(subject, { issuerId: "DEMO", serviceAccountEmail: "demo@example.invalid", origins: [origin] }) };
+    if (!cfg) return { kind: "demo", wallet, payload: googleSaveClaims(subject, { issuerId: "DEMO", serviceAccountEmail: "demo@example.invalid", origins: [assetOrigin] }) };
     const { googleSaveUrl } = await import("./google-wallet.server");
-    return { kind: "redirect", url: await googleSaveUrl(subject, origin, cfg) };
+    return { kind: "redirect", url: await googleSaveUrl(subject, assetOrigin, cfg) };
   }
 
   const cfg = appleWalletConfig(env);
   if (!cfg) return { kind: "demo", wallet, payload: applePassJson(subject, { passTypeId: "pass.demo.rout", teamId: "DEMO" }) };
-  const img = async (path: string) => new Uint8Array(await (await fetch(`${origin}${path}`)).arrayBuffer());
+  const img = async (path: string) => new Uint8Array(await (await fetch(`${assetOrigin}${path}`)).arrayBuffer());
   const [icon, icon2x, logo] = await Promise.all([img("/favicon.png"), img("/icon-192.png"), img("/apple-touch-icon.png")]);
   const { buildPkpass } = await import("./apple-wallet.server");
   const bytes = await buildPkpass(subject, { "icon.png": icon, "icon@2x.png": icon2x, "logo.png": logo }, cfg);

@@ -5,8 +5,9 @@ export const Route = createFileRoute("/api_/public/lastfm/$handle")({
   server: {
     handlers: {
       GET: async ({ request, params }) => {
-        const { guardRequest } = await import("@/lib/api-guard.server");
-        const limited = guardRequest(request, "lastfm-public", 120, 60000);
+        // Shared, Neon-backed limit (project rule for public routes).
+        const { guardShared } = await import("@/lib/rate-limit-db.server");
+        const limited = await guardShared(request, "lastfm-public", { limit: 120, windowSec: 60 });
         if (limited) return limited;
         const headers = { "cache-control": "public, max-age=30" };
         const { LASTFM_IDLE } = await import("@/lib/integrations/lastfm");
