@@ -145,6 +145,22 @@ export const deleteOAuthClient = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+/**
+ * One-way pairwise opt-in for legacy apps (Cluster C). Existing users get a new
+ * uncorrelatable `sub`; the switch is irreversible and needs a fresh step-up.
+ */
+export const upgradeOAuthClientToPairwise = createServerFn({ method: "POST" })
+  .middleware([requireDeveloperAccess])
+  .inputValidator((data: unknown) => idSchema.parse(data))
+  .handler(async ({ data, context }) => {
+    await assertVerified(context.userId);
+    const { ensureStepUpSession } = await import("@/lib/auth/step-up.server");
+    await ensureStepUpSession(context.userId, "oauth_subject_type");
+    const { upgradeClientToPairwise } = await import("./provider.server");
+    const client = await friendly(async () => upgradeClientToPairwise(context.userId, data.id));
+    return { ok: true as const, subjectType: client.subjectType };
+  });
+
 export const rotateOAuthSecret = createServerFn({ method: "POST" })
   .middleware([requireDeveloperAccess])
   .inputValidator((data: unknown) => idSchema.parse(data))
@@ -348,7 +364,7 @@ async function profileOf(userId: string) {
  * wrong redirect URI we never send the user back to the app.
  */
 async function checkRequest(data: AuthorizeInput) {
-  const { getClientByClientId, redirectAllowed, SUPPORTED_SCOPES } = await import("./provider.server");
+  const { getClientByClientId, redirectAllowed } = await import("./provider.server");
   const { logOAuthEvent } = await import("./debug-events.server");
   const requested = (data.scope ?? "openid").split(" ").filter(Boolean);
   const detail = {
@@ -381,12 +397,10 @@ async function checkRequest(data: AuthorizeInput) {
   if (!hasPkce && (client.requirePkce || !client.hasSecret)) {
     return fail("missing_code_challenge", "Deze app moet PKCE (S256) meesturen.", "invalid_request");
   }
-  const scopes = requested.filter(
-    (s) => client.scopes.includes(s) && SUPPORTED_SCOPES.includes(s as never),
-  );
-  if (!scopes.includes("openid")) scopes.unshift("openid");
-  const unknown = requested.find((s) => !scopes.includes(s));
-  if (unknown) return fail("invalid_scope", `Deze app vraagt een recht dat niet mag: ${unknown}.`, "invalid_scope");
+  const { validateRequestedScopes } = await import("./scope-rules");
+  const validation = validateRequestedScopes(requested, client.scopes);
+  if (!validation.ok) return fail("invalid_scope", `Deze app vraagt een recht dat niet mag: ${validation.unknown}.`, "invalid_scope");
+  const scopes = validation.scopes;
   const stepUp = needsStepUp({
     flowPreference: client.flowPreference,
     prompt: data.prompt ?? null,
@@ -599,6 +613,9 @@ export const silentAuthorize = createServerFn({ method: "POST" })
 
 /* ------------------------------------------------------------ step-up ---- */
 
+/** JSON-compatible value — the only shape TanStack Start may serialize. */
+type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+
 const stepUpBindingSchema = z.object({
   clientId: z.string().min(4).max(120),
   redirectUri: z.string().min(4).max(2000).transform((v) => cleanRedirectUri(v)),
@@ -670,7 +687,7 @@ export const startPasskeyStepUpFn = createServerFn({ method: "POST" })
     if (!req) return { ok: false as const, error: "Deze app is onbekend bij ROUT." };
     const { startPasskeyStepUp } = await import("./provider.server");
     const options = await startPasskeyStepUp(context.userId, req.client.clientId, req.requestId);
-    return options ? { ok: true as const, options: JSON.parse(JSON.stringify(options)) as Record<string, unknown> } : { ok: false as const, error: "Geen passkey gevonden voor dit account." };
+    return options ? { ok: true as const, options: JSON.parse(JSON.stringify(options)) as JsonValue } : { ok: false as const, error: "Geen passkey gevonden voor dit account." };
   });
 
 const assertionSchema = z.object({

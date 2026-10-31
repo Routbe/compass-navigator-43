@@ -50,3 +50,56 @@ export function splitLegalName(full: string | null): { first_name: string | null
   if (parts.length === 1) return { first_name: parts[0]!, last_name: null, full_legal_name: clean };
   return { first_name: parts.slice(0, -1).join(" "), last_name: parts[parts.length - 1]!, full_legal_name: clean };
 }
+
+/* ---------------------------------------------------- whitelist (Cluster C) ---- */
+
+/**
+ * Authoritative whitelist of every scope ROUT may issue. This is the single
+ * source of truth: `provider.server.ts` re-exports it, the authorize screen and
+ * the token endpoint both enforce it, and the discovery document advertises it.
+ */
+export const SUPPORTED_SCOPES = [
+  "openid",
+  "profile",
+  "email",
+  "linked_accounts",
+  "offline_access",
+  "sybil:verify",
+  "profile:read",
+  "identity:legal_name",
+  "identity:national_id",
+] as const;
+export type SupportedScope = (typeof SUPPORTED_SCOPES)[number];
+
+export type ScopeValidation =
+  | { ok: true; scopes: string[] }
+  | { ok: false; unknown: string };
+
+/**
+ * Validates a requested scope set against the whitelist and the client's
+ * registered scopes. `openid` is always present in the result. The first
+ * offending scope is reported so the caller can answer `invalid_scope`
+ * before any consent screen is shown.
+ */
+export function validateRequestedScopes(requested: string[], clientScopes: string[]): ScopeValidation {
+  const scopes = [...new Set(requested.filter((s) => clientScopes.includes(s) && (SUPPORTED_SCOPES as readonly string[]).includes(s)))];
+  if (!scopes.includes("openid")) scopes.unshift("openid");
+  const unknown = requested.find((s) => !scopes.includes(s));
+  if (unknown) return { ok: false, unknown };
+  return { ok: true, scopes };
+}
+
+/**
+ * OIDC refresh down-scoping: a refresh request may ask for a narrower scope
+ * set, never a wider or unknown one. No requested scope means the original
+ * grant is reused unchanged.
+ */
+export function resolveRefreshScopes(requested: string[] | null, granted: string[]): ScopeValidation {
+  if (!requested || requested.length === 0) return { ok: true, scopes: granted };
+  const unique = [...new Set(requested)];
+  const offending = unique.find(
+    (s) => !granted.includes(s) || !(SUPPORTED_SCOPES as readonly string[]).includes(s),
+  );
+  if (offending) return { ok: false, unknown: offending };
+  return { ok: true, scopes: unique };
+}

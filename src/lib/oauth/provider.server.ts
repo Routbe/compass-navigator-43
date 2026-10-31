@@ -23,8 +23,11 @@ async function secretPepper(): Promise<string> {
   return resolved.secret;
 }
 import { canonicalAppUrl } from "@/lib/app-url";
+import { SUPPORTED_SCOPES } from "./scope-rules";
 
-export const SUPPORTED_SCOPES = ["openid", "profile", "email", "linked_accounts", "offline_access", "sybil:verify", "profile:read", "identity:legal_name", "identity:national_id"] as const;
+// The whitelist lives in pure scope-rules.ts (Cluster C); re-exported here so
+// existing imports keep working.
+export { SUPPORTED_SCOPES };
 
 /** Trusted KYC partners may request identity:national_id (set by ROUT admins only, db/0139). */
 export async function isTrustedKycPartner(clientId: string): Promise<boolean> {
@@ -271,6 +274,30 @@ export async function updateClient(
     where id = ${id} and owner_user_id = ${ownerUserId} returning *`) as Row[];
   if (!rows[0]) throw new OAuthError("not_found", "Deze app bestaat niet (meer).");
   return toClient(rows[0]);
+}
+
+/**
+ * One-way opt-in for legacy clients: `public` → `pairwise` subjects. Existing
+ * users of this app get a new, uncorrelatable `sub` after the switch — that is
+ * exactly why only the app owner can request it and it can never be undone.
+ * The sector is derived from the registered redirect host and locked in.
+ */
+export async function upgradeClientToPairwise(ownerUserId: string, id: string): Promise<OAuthClient> {
+  const current = (await sql`select * from public.oauth_clients where id = ${id} and owner_user_id = ${ownerUserId} limit 1`) as Row[];
+  const row = current[0];
+  if (!row) throw new OAuthError("not_found", "Deze app bestaat niet (meer).");
+  if (row["subject_type"] === "pairwise") return toClient(row);
+  const uris = (row["redirect_uris"] as string[] | null) ?? [];
+  if (!uris.length) throw new OAuthError("invalid_client_metadata", "Registreer eerst een redirect-adres.");
+  const sectors = new Set(uris.map(redirectSector));
+  if (sectors.size !== 1) throw new OAuthError("invalid_client_metadata", "Pairwise apps vereisen één redirect-host.");
+  const sectorId = redirectSector(uris[0]!);
+  const updated = (await sql`update public.oauth_clients
+      set subject_type = 'pairwise', sector_id = ${sectorId}, updated_at = now()
+      where id = ${id} and owner_user_id = ${ownerUserId} and subject_type = 'public'
+      returning *`) as Row[];
+  if (!updated[0]) throw new OAuthError("invalid_client_metadata", "Deze app gebruikt al pairwise subjects.");
+  return toClient(updated[0]);
 }
 
 /** Console-instellingen (db/50). Enkel meegegeven velden veranderen. */

@@ -1,7 +1,7 @@
 import { sql } from "@/lib/neon";
 import { authenticateOAuthClient, OAuthError, issuer, sha256Base64Url, signJwt, verifyAccessToken, identityClaims } from "./provider.server";
 
-export async function exchangeRefreshToken(input: { token: string; clientId: string; clientSecret: string | null; ip: string | null }) {
+export async function exchangeRefreshToken(input: { token: string; clientId: string; clientSecret: string | null; ip: string | null; requestedScope?: string | null }) {
   const client = await authenticateOAuthClient(input.clientId, input.clientSecret, input.ip);
   const next = crypto.randomUUID() + crypto.randomUUID();
   const rows = await sql`select * from public.rotate_oauth_refresh(${await sha256Base64Url(input.token)},${client.clientId},${await sha256Base64Url(next)})`;
@@ -9,7 +9,13 @@ export async function exchangeRefreshToken(input: { token: string; clientId: str
   if (!row || row["result"] !== "ok") throw new OAuthError("invalid_grant", "Refresh token is ongeldig of hergebruikt.");
   const now = Math.floor(Date.now()/1000);
   const ttl = client.accessTokenTtl;
-  const scopes = row["scopes"] as string[];
+  // OIDC: a refresh request may narrow the scope set, never widen it or name
+  // scopes outside the whitelist — anything else is invalid_scope (Cluster C).
+  const { resolveRefreshScopes } = await import("./scope-rules");
+  const requested = input.requestedScope?.split(" ").filter(Boolean) ?? null;
+  const resolved = resolveRefreshScopes(requested, row["scopes"] as string[]);
+  if (!resolved.ok) throw new OAuthError("invalid_scope", `Deze scope is niet toegekend: ${resolved.unknown}.`);
+  const scopes = resolved.scopes;
   const token = await signJwt({ iss: issuer(), sub: row["subject"], aud: client.clientId, iat: now, exp: now+ttl, scope: scopes.join(" "), token_use: "access", jti: crypto.randomUUID() });
   const claims = await identityClaims(String(row["user_id"]), scopes, { handleSync: client.handleSyncEnabled, clientId: client.clientId });
   const idToken = await signJwt({ iss: issuer(), sub: row["subject"], aud: client.clientId, iat: now, exp: now+ttl, token_use: "id",

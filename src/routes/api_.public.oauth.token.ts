@@ -43,7 +43,9 @@ export const Route = createFileRoute("/api_/public/oauth/token")({
           try {
             const input = await readTokenRequest(new Request(request.url, { method: "POST", headers: request.headers, body: normalized.toString() }));
             const { exchangeRefreshToken } = await import("@/lib/oauth/tokens.server");
-            return Response.json(await exchangeRefreshToken(input),{ headers: { ...cors,"cache-control":"no-store",pragma:"no-cache" } });
+            const scope = form.get("scope");
+            if (scope && scope.length > 500) return fail("invalid_request", "Scope-parameter te lang.");
+            return Response.json(await exchangeRefreshToken({ ...input, requestedScope: scope }),{ headers: { ...cors,"cache-control":"no-store",pragma:"no-cache" } });
           } catch(error) { return tokenFailure(error); }
         }
         if (form.get("grant_type") === "client_credentials") {

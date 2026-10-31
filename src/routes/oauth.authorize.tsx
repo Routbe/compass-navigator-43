@@ -161,7 +161,9 @@ function AuthorizePage() {
     setBusy(true);
     setCodeError(null);
     try {
-      const start = await startPasskey({ data: binding });
+      const start = (await startPasskey({ data: binding })) as
+        | { ok: true; options: Record<string, unknown> }
+        | { ok: false; error: string };
       if (!start.ok) return setCodeError(start.error);
       const { startAuthentication } = await import("@simplewebauthn/browser");
       const assertion = await startAuthentication({ optionsJSON: start.options as never });
