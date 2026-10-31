@@ -42,3 +42,13 @@
 ## Waiting on user
 - [ ] Secrets in this project: BETTER_AUTH_SECRET, ROUT_PROVIDER_*, Google/Apple sign-in, BREVO_API_KEY, Stripe/Wise, storage, STEAM_WEB_API_KEY, Apple/Google Wallet certificates, EMAIL_INBOUND_TOKEN
 - [ ] Live sign-in test (needs secrets)
+
+## Security hardening wave (2026-10-31)
+- [x] Cluster A: account-merge allowlist + 0140 + wizard + 13 tests
+- [x] Cluster B: step-up OTP v2 HMAC + WebAuthn request-binding + 0141 + 16 tests
+- [x] Cluster C: scope whitelist (authorize + token + refresh down-scoping), pairwise opt-in, sybil nullifier gating + 0142 + 14 tests
+- [x] Cluster D: wallet canonical origin + "INFORMATIEF" event passes + Last.fm guardShared + tests
+- [ ] Cluster E: 0143 grants alignment delta + 91_shadowban checksum doc (live Neon diff blocked: no live DB access)
+- [ ] Scan fixes: SSRF guard on Mastodon registration + DB registration cache + rate limit; booking PII token-gating (0144); domain root-redirect entitlement check; log redaction (bunq); email-forward HTML sanitization
+- [ ] Full validation cycle: tsgo, full vitest run, schema-replay-snapshot
+- [ ] Migrations 0140-0144 NOT applied on live Neon (need per-statement user approval)
