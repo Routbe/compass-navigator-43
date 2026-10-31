@@ -102,7 +102,7 @@ export const bookingRequest = z.object({
 export type BookingRequest = z.infer<typeof bookingRequest>;
 
 export type BookingOutcome =
-  | { ok: true; bookingIds: string[]; status: z.infer<typeof bookingStatus>; hostUserIds: string[]; checkoutUrl: string | null }
+  | { ok: true; bookingIds: string[]; bookingToken: string | null; status: z.infer<typeof bookingStatus>; hostUserIds: string[]; checkoutUrl: string | null }
   | { ok: false; reason: "slot_taken" | "outside_availability" | "too_soon" | "too_far" | "inactive" | "payment_unavailable" | "invalid_intake" };
 
 /** Zero-knowledge busy block: the ONLY shape a calendar adapter may emit. */
