@@ -113,7 +113,12 @@
       "max": "9223372036854775807",
       "cycle": false,
       "ownedBy": "public.security_audit_logs.id",
-      "grants": {}
+      "grants": {
+        "rout_app": [
+          "SELECT",
+          "USAGE"
+        ]
+      }
     }
   ],
   "tables": [
@@ -4310,6 +4315,14 @@
           "default": "false",
           "identity": null,
           "generated": null
+        },
+        {
+          "name": "booking_token",
+          "type": "text",
+          "notNull": false,
+          "default": "encode(gen_random_bytes(32), 'hex'::text)",
+          "identity": null,
+          "generated": null
         }
       ],
       "constraints": [
@@ -4369,6 +4382,7 @@
         "CREATE INDEX bookings_hold_expiry ON public.bookings USING btree (hold_expires_at) WHERE (status = ANY (ARRAY['held'::text, 'pending_payment'::text]))",
         "CREATE INDEX bookings_host_time ON public.bookings USING btree (host_user_id, start_utc)",
         "CREATE INDEX bookings_shared_slot ON public.bookings USING btree (event_type_id, start_utc) WHERE shared_slot",
+        "CREATE UNIQUE INDEX bookings_booking_token_key ON public.bookings USING btree (booking_token)",
         "CREATE UNIQUE INDEX bookings_checkout ON public.bookings USING btree (stripe_checkout_session_id) WHERE (stripe_checkout_session_id IS NOT NULL)"
       ],
       "triggers": [],
@@ -4504,14 +4518,7 @@
       "rls": true,
       "forceRls": false,
       "policies": [],
-      "grants": {
-        "rout_app": [
-          "DELETE",
-          "INSERT",
-          "SELECT",
-          "UPDATE"
-        ]
-      }
+      "grants": {}
     },
     {
       "schema": "public",
@@ -8314,6 +8321,155 @@
     },
     {
       "schema": "public",
+      "name": "mastodon_app_registrations",
+      "columns": [
+        {
+          "name": "instance",
+          "type": "text",
+          "notNull": true,
+          "default": null,
+          "identity": null,
+          "generated": null
+        },
+        {
+          "name": "redirect_uri",
+          "type": "text",
+          "notNull": true,
+          "default": null,
+          "identity": null,
+          "generated": null
+        },
+        {
+          "name": "client_id",
+          "type": "text",
+          "notNull": true,
+          "default": null,
+          "identity": null,
+          "generated": null
+        },
+        {
+          "name": "client_secret",
+          "type": "text",
+          "notNull": true,
+          "default": null,
+          "identity": null,
+          "generated": null
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "notNull": true,
+          "default": "now()",
+          "identity": null,
+          "generated": null
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "notNull": true,
+          "default": "now()",
+          "identity": null,
+          "generated": null
+        }
+      ],
+      "constraints": [
+        {
+          "name": "mastodon_app_registrations_pkey",
+          "kind": "p",
+          "def": "PRIMARY KEY (instance, redirect_uri)"
+        }
+      ],
+      "indexes": [],
+      "triggers": [],
+      "rls": false,
+      "forceRls": false,
+      "policies": [],
+      "grants": {}
+    },
+    {
+      "schema": "public",
+      "name": "merged_auth_account_archive",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "notNull": true,
+          "default": "gen_random_uuid()",
+          "identity": null,
+          "generated": null
+        },
+        {
+          "name": "primary_user_id",
+          "type": "uuid",
+          "notNull": true,
+          "default": null,
+          "identity": null,
+          "generated": null
+        },
+        {
+          "name": "secondary_auth_user_id",
+          "type": "text",
+          "notNull": true,
+          "default": null,
+          "identity": null,
+          "generated": null
+        },
+        {
+          "name": "provider_id",
+          "type": "text",
+          "notNull": true,
+          "default": null,
+          "identity": null,
+          "generated": null
+        },
+        {
+          "name": "provider_account_id",
+          "type": "text",
+          "notNull": true,
+          "default": null,
+          "identity": null,
+          "generated": null
+        },
+        {
+          "name": "original_created_at",
+          "type": "timestamp with time zone",
+          "notNull": false,
+          "default": null,
+          "identity": null,
+          "generated": null
+        },
+        {
+          "name": "archived_at",
+          "type": "timestamp with time zone",
+          "notNull": true,
+          "default": "now()",
+          "identity": null,
+          "generated": null
+        }
+      ],
+      "constraints": [
+        {
+          "name": "merged_auth_account_archive_pkey",
+          "kind": "p",
+          "def": "PRIMARY KEY (id)"
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX merged_auth_account_archive_primary_idx ON public.merged_auth_account_archive USING btree (primary_user_id)"
+      ],
+      "triggers": [],
+      "rls": true,
+      "forceRls": false,
+      "policies": [],
+      "grants": {
+        "rout_app": [
+          "INSERT",
+          "SELECT"
+        ]
+      }
+    },
+    {
+      "schema": "public",
       "name": "newsletter_subscribers",
       "columns": [
         {
@@ -9641,12 +9797,7 @@
           "check": "(user_id = rout_current_user_id())"
         }
       ],
-      "grants": {
-        "rout_app": [
-          "INSERT",
-          "SELECT"
-        ]
-      }
+      "grants": {}
     },
     {
       "schema": "public",
@@ -9759,6 +9910,7 @@
       ],
       "grants": {
         "rout_app": [
+          "DELETE",
           "INSERT",
           "SELECT",
           "UPDATE"
@@ -10041,6 +10193,108 @@
     },
     {
       "schema": "public",
+      "name": "oauth_step_up_challenges",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "notNull": true,
+          "default": "gen_random_uuid()",
+          "identity": null,
+          "generated": null
+        },
+        {
+          "name": "user_id",
+          "type": "uuid",
+          "notNull": true,
+          "default": null,
+          "identity": null,
+          "generated": null
+        },
+        {
+          "name": "client_id",
+          "type": "text",
+          "notNull": true,
+          "default": null,
+          "identity": null,
+          "generated": null
+        },
+        {
+          "name": "request_id",
+          "type": "text",
+          "notNull": true,
+          "default": null,
+          "identity": null,
+          "generated": null
+        },
+        {
+          "name": "challenge",
+          "type": "text",
+          "notNull": true,
+          "default": null,
+          "identity": null,
+          "generated": null
+        },
+        {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "notNull": true,
+          "default": null,
+          "identity": null,
+          "generated": null
+        },
+        {
+          "name": "consumed_at",
+          "type": "timestamp with time zone",
+          "notNull": false,
+          "default": null,
+          "identity": null,
+          "generated": null
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "notNull": true,
+          "default": "now()",
+          "identity": null,
+          "generated": null
+        }
+      ],
+      "constraints": [
+        {
+          "name": "oauth_step_up_challenges_challenge_key",
+          "kind": "u",
+          "def": "UNIQUE (challenge)"
+        },
+        {
+          "name": "oauth_step_up_challenges_pkey",
+          "kind": "p",
+          "def": "PRIMARY KEY (id)"
+        },
+        {
+          "name": "oauth_step_up_challenges_user_id_fkey",
+          "kind": "f",
+          "def": "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE"
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX oauth_step_up_challenges_user_idx ON public.oauth_step_up_challenges USING btree (user_id, client_id, request_id) WHERE (consumed_at IS NULL)"
+      ],
+      "triggers": [],
+      "rls": true,
+      "forceRls": false,
+      "policies": [],
+      "grants": {
+        "rout_app": [
+          "DELETE",
+          "INSERT",
+          "SELECT",
+          "UPDATE"
+        ]
+      }
+    },
+    {
+      "schema": "public",
       "name": "oauth_step_up_codes",
       "columns": [
         {
@@ -10114,9 +10368,30 @@
           "default": "now()",
           "identity": null,
           "generated": null
+        },
+        {
+          "name": "request_id",
+          "type": "text",
+          "notNull": false,
+          "default": null,
+          "identity": null,
+          "generated": null
+        },
+        {
+          "name": "method",
+          "type": "text",
+          "notNull": true,
+          "default": "'email'::text",
+          "identity": null,
+          "generated": null
         }
       ],
       "constraints": [
+        {
+          "name": "oauth_step_up_codes_method_check",
+          "kind": "c",
+          "def": "CHECK ((method = ANY (ARRAY['email'::text, 'passkey'::text])))"
+        },
         {
           "name": "oauth_step_up_codes_pkey",
           "kind": "p",
@@ -10124,7 +10399,8 @@
         }
       ],
       "indexes": [
-        "CREATE INDEX oauth_step_up_codes_lookup ON public.oauth_step_up_codes USING btree (user_id, client_id, created_at DESC)"
+        "CREATE INDEX oauth_step_up_codes_lookup ON public.oauth_step_up_codes USING btree (user_id, client_id, created_at DESC)",
+        "CREATE INDEX oauth_step_up_codes_request_idx ON public.oauth_step_up_codes USING btree (user_id, client_id, request_id) WHERE (consumed_at IS NULL)"
       ],
       "triggers": [],
       "rls": true,
@@ -13375,7 +13651,14 @@
       "rls": true,
       "forceRls": false,
       "policies": [],
-      "grants": {}
+      "grants": {
+        "rout_app": [
+          "DELETE",
+          "INSERT",
+          "SELECT",
+          "UPDATE"
+        ]
+      }
     },
     {
       "schema": "public",
@@ -19210,6 +19493,12 @@
       "name": "rout_is_workspace_member",
       "args": "ws uuid",
       "def": "CREATE OR REPLACE FUNCTION public.rout_is_workspace_member(ws uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$ select exists (select 1 from public.workspace_members m\n                       where m.workspace_id = ws and m.user_id = public.rout_current_user_id()) $function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_merge_assert",
+      "args": "ok boolean, reason text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_merge_assert(ok boolean, reason text)\n RETURNS boolean\n LANGUAGE plpgsql\n IMMUTABLE\n SET search_path TO 'public'\nAS $function$\nbegin\n  if not coalesce(ok, false) then\n    raise exception '%', reason using errcode = 'P0001';\n  end if;\n  return true;\nend\n$function$"
     },
     {
       "schema": "public",

@@ -10,6 +10,11 @@ export const Route = createFileRoute("/api_/public/mastodon/start")({
   server: {
     handlers: {
       GET: async ({ request }) => {
+        // Strikte IP-rate limit: registratie doet een uitgaand netwerkverzoek.
+        const { guardShared } = await import("@/lib/rate-limit-db.server");
+        const limited = await guardShared(request, "mastodon-start", { limit: 10, windowSec: 60 });
+        if (limited) return limited;
+
         const url = new URL(request.url);
         const instance = url.searchParams.get("instance") ?? "";
         const next = url.searchParams.get("next") ?? "/dashboard";

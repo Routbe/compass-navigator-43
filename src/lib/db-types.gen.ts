@@ -450,6 +450,7 @@ export interface PublicBookingsRow {
   "updated_at": string | Date;
   "intake_answers": JsonValue | null;
   "shared_slot": boolean;
+  "booking_token": string | null;
 }
 
 export interface PublicBunqOauthTokensRow {
@@ -853,6 +854,25 @@ export interface PublicLoginCodesRow {
   "created_at": string | Date;
 }
 
+export interface PublicMastodonAppRegistrationsRow {
+  "instance": string;
+  "redirect_uri": string;
+  "client_id": string;
+  "client_secret": string;
+  "created_at": string | Date;
+  "updated_at": string | Date;
+}
+
+export interface PublicMergedAuthAccountArchiveRow {
+  "id": string;
+  "primary_user_id": string;
+  "secondary_auth_user_id": string;
+  "provider_id": string;
+  "provider_account_id": string;
+  "original_created_at": string | Date | null;
+  "archived_at": string | Date;
+}
+
 export interface PublicNewsletterSubscribersRow {
   "id": string;
   "handle": string;
@@ -1038,6 +1058,17 @@ export interface PublicOauthSigningKeysRow {
   "revoked_at": string | Date | null;
 }
 
+export interface PublicOauthStepUpChallengesRow {
+  "id": string;
+  "user_id": string;
+  "client_id": string;
+  "request_id": string;
+  "challenge": string;
+  "expires_at": string | Date;
+  "consumed_at": string | Date | null;
+  "created_at": string | Date;
+}
+
 export interface PublicOauthStepUpCodesRow {
   "id": string;
   "user_id": string;
@@ -1048,6 +1079,8 @@ export interface PublicOauthStepUpCodesRow {
   "verified_at": string | Date | null;
   "consumed_at": string | Date | null;
   "created_at": string | Date;
+  "request_id": string | null;
+  "method": string;
 }
 
 export interface PublicOnboardingDraftsRow {
@@ -2029,6 +2062,8 @@ export interface DbTables {
   "public.lead_captures": PublicLeadCapturesRow;
   "public.links": PublicLinksRow;
   "public.login_codes": PublicLoginCodesRow;
+  "public.mastodon_app_registrations": PublicMastodonAppRegistrationsRow;
+  "public.merged_auth_account_archive": PublicMergedAuthAccountArchiveRow;
   "public.newsletter_subscribers": PublicNewsletterSubscribersRow;
   "public.nfc_waitlist": PublicNfcWaitlistRow;
   "public.notifications": PublicNotificationsRow;
@@ -2043,6 +2078,7 @@ export interface DbTables {
   "public.oauth_email_forwarding_rules": PublicOauthEmailForwardingRulesRow;
   "public.oauth_refresh_tokens": PublicOauthRefreshTokensRow;
   "public.oauth_signing_keys": PublicOauthSigningKeysRow;
+  "public.oauth_step_up_challenges": PublicOauthStepUpChallengesRow;
   "public.oauth_step_up_codes": PublicOauthStepUpCodesRow;
   "public.onboarding_drafts": PublicOnboardingDraftsRow;
   "public.phone_otp_codes": PublicPhoneOtpCodesRow;

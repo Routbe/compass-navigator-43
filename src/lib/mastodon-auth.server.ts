@@ -74,11 +74,49 @@ type AppCredentials = { clientId: string; clientSecret: string };
 /** Best-effort cache so repeat sign-ins skip the registration round-trip. */
 const appCache = new Map<string, AppCredentials>();
 
+/**
+ * Persistent registration cache (db/0144): one dynamic app registration per
+ * instance + redirect URI, so repeat sign-ins never re-POST /api/v1/apps.
+ * Falls back to the in-memory cache when the table is not there yet.
+ */
+async function readRegistrationCache(cacheKey: string): Promise<AppCredentials | null> {
+  const [instance, redirectUri] = cacheKey.split("|");
+  try {
+    const { sql } = await import("./neon");
+    const rows = (await sql`
+      select client_id, client_secret from public.mastodon_app_registrations
+       where instance = ${instance} and redirect_uri = ${redirectUri} limit 1`) as {
+      client_id: string;
+      client_secret: string;
+    }[];
+    const row = rows[0];
+    return row ? { clientId: row.client_id, clientSecret: row.client_secret } : null;
+  } catch {
+    return null;
+  }
+}
+
+async function writeRegistrationCache(cacheKey: string, creds: AppCredentials): Promise<void> {
+  const [instance, redirectUri] = cacheKey.split("|");
+  try {
+    const { sql } = await import("./neon");
+    await sql`
+      insert into public.mastodon_app_registrations (instance, redirect_uri, client_id, client_secret)
+      values (${instance}, ${redirectUri}, ${creds.clientId}, ${creds.clientSecret})
+      on conflict (instance, redirect_uri) do nothing`;
+  } catch {
+    /* cache miss is fine: the in-memory map still covers this run */
+  }
+}
+
 async function timedFetch(url: string, init?: RequestInit): Promise<Response> {
+  // SSRF-guard: alleen https, publieke hosts, geen privé/loopback/metadata-IPs.
+  const { validateOutboundUrl } = await import("./security/ssrf-guard.server");
+  await validateOutboundUrl(url);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
-    return await fetch(url, { ...init, signal: controller.signal });
+    return await fetch(url, { ...init, redirect: "manual", signal: controller.signal });
   } catch {
     throw new MastodonAuthError(
       "instance_unreachable",
@@ -170,8 +208,11 @@ async function openState(state: string): Promise<StatePayload> {
 
 async function registerApp(instance: string, redirectUri: string): Promise<AppCredentials> {
   const cacheKey = `${instance}|${redirectUri}`;
-  const cached = appCache.get(cacheKey);
-  if (cached) return cached;
+  const cached = appCache.get(cacheKey) ?? (await readRegistrationCache(cacheKey));
+  if (cached) {
+    appCache.set(cacheKey, cached);
+    return cached;
+  }
 
   const body = new URLSearchParams({
     client_name: APP_NAME,
@@ -202,6 +243,7 @@ async function registerApp(instance: string, redirectUri: string): Promise<AppCr
   }
   const creds = { clientId: json.client_id, clientSecret: json.client_secret };
   appCache.set(cacheKey, creds);
+  void writeRegistrationCache(cacheKey, creds);
   return creds;
 }
 

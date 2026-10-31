@@ -77,7 +77,7 @@ export default function BookPublic({ eventTypeId, selectedStart }: { eventTypeId
     setSending(false);
     if (r.ok) {
       if (r.checkoutUrl) { window.location.href = r.checkoutUrl; return; }
-      void navigate({ to: "/booking/$bookingId", params: { bookingId: r.bookingId }, search: { paid: undefined } });
+      void navigate({ to: "/booking/$bookingId", params: { bookingId: r.bookingId }, search: { paid: undefined, token: r.bookingToken ?? undefined } });
       return;
     }
     if (r.reason === "slot_taken") { setError(t("booking.public.slotTaken")); setSlot(null); void slotsQ.refetch(); }

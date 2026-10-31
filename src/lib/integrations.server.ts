@@ -229,6 +229,10 @@ export async function fetchStatus(provider: string, handle: string): Promise<Int
       }
       if (!isPublicHost(host)) return null;
       try {
+        // DNS-niveau SSRF-guard: een publiek uitziende naam mag niet naar een
+        // intern/metadata-adres resolven (security/ssrf-guard.server.ts).
+        const { validateOutboundUrl } = await import("./security/ssrf-guard.server");
+        await validateOutboundUrl(handle);
         const res = await fetch(handle, { redirect: "manual", signal: AbortSignal.timeout(FETCH_TIMEOUT_MS), headers: { "user-agent": "rout.be feed reader", accept: "application/rss+xml, application/atom+xml, application/xml, text/xml" } });
         if (!res.ok) return null;
         const xml = (await res.text()).slice(0, 500_000);

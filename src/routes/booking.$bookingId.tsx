@@ -2,7 +2,10 @@ import { createFileRoute } from "@tanstack/react-router";
 import BookingDone from "@/pages/BookingDone";
 
 export const Route = createFileRoute("/booking/$bookingId")({
-  validateSearch: (s: Record<string, unknown>) => ({ paid: s["paid"] === "1" || s["paid"] === 1 ? "1" : undefined }),
+  validateSearch: (s: Record<string, unknown>) => ({
+    paid: s["paid"] === "1" || s["paid"] === 1 ? "1" : undefined,
+    token: typeof s["token"] === "string" && /^[a-f0-9]{64}$/.test(s["token"]) ? s["token"] : undefined,
+  }),
   head: () => ({
     meta: [
       { title: "Je afspraak | ROUT" },
@@ -19,6 +22,6 @@ export const Route = createFileRoute("/booking/$bookingId")({
 
 function DoneRoute() {
   const { bookingId } = Route.useParams();
-  const { paid } = Route.useSearch();
-  return <BookingDone bookingId={bookingId} paid={paid === "1"} />;
+  const { paid, token } = Route.useSearch();
+  return <BookingDone bookingId={bookingId} paid={paid === "1"} token={token} />;
 }

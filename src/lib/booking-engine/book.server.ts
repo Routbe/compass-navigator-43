@@ -162,9 +162,14 @@ export async function bookSlot(req: BookingRequest, now = new Date()): Promise<B
       if (isSlotTakenError(err)) continue; // round robin: next least-loaded host
       throw err;
     }
+    // Gasttoken (db/0144): de bevestigingslink toont PII alleen met dit token.
+    const tokenRows = (await sql`select booking_token from public.bookings where id = ${bookingIds[0]}::uuid`) as {
+      booking_token: string | null;
+    }[];
+    const bookingToken = tokenRows[0]?.booking_token ?? null;
     let checkoutUrl: string | null = null;
     if (paid) {
-      checkoutUrl = await createCheckoutHold(bookingIds[0]!, et, req, holdExpires!).catch(async (e: unknown) => {
+      checkoutUrl = await createCheckoutHold(bookingIds[0]!, et, req, holdExpires!, bookingToken).catch(async (e: unknown) => {
         console.error("[booking] checkout", e instanceof Error ? e.message : "error");
         await releaseBookingHold(bookingIds[0]!);
         return null;
@@ -175,12 +180,12 @@ export async function bookSlot(req: BookingRequest, now = new Date()): Promise<B
       const { sendBookingInvite } = await import("./invite.server");
       void sendBookingInvite(bookingIds[0]!);
     }
-    return { ok: true, bookingIds, status, hostUserIds: hostIds, checkoutUrl };
+    return { ok: true, bookingIds, bookingToken, status, hostUserIds: hostIds, checkoutUrl };
   }
   return { ok: false, reason: "slot_taken" };
 }
 
-async function createCheckoutHold(bookingId: string, et: EventTypeRules, req: BookingRequest, expires: Date): Promise<string> {
+async function createCheckoutHold(bookingId: string, et: EventTypeRules, req: BookingRequest, expires: Date, bookingToken: string | null): Promise<string> {
   const site = (process.env["PUBLIC_SITE_URL"] ?? "https://rout.be").replace(/\/$/, "");
   const body = new URLSearchParams({
     mode: "payment",
@@ -193,7 +198,7 @@ async function createCheckoutHold(bookingId: string, et: EventTypeRules, req: Bo
     "metadata[booking_id]": bookingId,
     "payment_intent_data[metadata][booking_id]": bookingId,
     expires_at: String(Math.floor(expires.getTime() / 1000) + 5),
-    success_url: `${site}/booking/${bookingId}?paid=1`,
+    success_url: `${site}/booking/${bookingId}?paid=1${bookingToken ? `&token=${bookingToken}` : ""}`,
     cancel_url: `${site}/booking/${bookingId}?cancelled=1`,
   });
   const res = await fetch("https://api.stripe.com/v1/checkout/sessions", {
