@@ -48,7 +48,7 @@
 - [x] Cluster B: step-up OTP v2 HMAC + WebAuthn request-binding + 0141 + 16 tests
 - [x] Cluster C: scope whitelist (authorize + token + refresh down-scoping), pairwise opt-in, sybil nullifier gating + 0142 + 14 tests
 - [x] Cluster D: wallet canonical origin + "INFORMATIEF" event passes + Last.fm guardShared + tests
-- [ ] Cluster E: 0143 grants alignment delta + 91_shadowban checksum doc (live Neon diff blocked: no live DB access)
-- [ ] Scan fixes: SSRF guard on Mastodon registration + DB registration cache + rate limit; booking PII token-gating (0144); domain root-redirect entitlement check; log redaction (bunq); email-forward HTML sanitization
-- [ ] Full validation cycle: tsgo, full vitest run, schema-replay-snapshot
+- [x] Cluster E: 0143 grants alignment delta (rol rout_app) + 91_shadowban checksum gedocumenteerd in ENVIRONMENT.md (live Neon diff blijft blocked: geen live DB-toegang)
+- [x] Scan fixes: SSRF guard (ssrf-guard.server.ts) op Mastodon registratie + RSS feeds, DB registratiecache (0144), guardShared 10/min op mastodon/start; booking PII token-gating (0144, gemaskerde fallback, constant-time compare); domain root-redirect assertEntitled; bunq log-redactie (security/redact.ts); email-forward HTML sanitization + ROUT-banner (security/sanitize-html.ts)
+- [x] Full validation cycle: tsgo exit 0, 1183/1183 tests groen (198 files), schema-replay-snapshot zonder drift
 - [ ] Migrations 0140-0144 NOT applied on live Neon (need per-statement user approval)
