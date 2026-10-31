@@ -104,11 +104,14 @@ export async function deliverInbound(mail: InboundMail): Promise<InboundResult[]
         continue;
       }
       const { sendMail } = await import("@/emails/send.server");
-      const note = `Doorgestuurd door ROUT via ${alias}@${domain}`;
+      const { sanitizeForwardedHtml } = await import("@/lib/security/sanitize-html");
+      const note = `Dit bericht is verzonden via het contactformulier op ROUT.be (doorgestuurd via ${alias}@${domain})`;
       const sent = await sendMail({
         to: target!,
         subject: mail.subject.slice(0, 250) || "(geen onderwerp)",
-        html: mail.html ? `<p style="font-size:12px;color:#666">${note}</p>${mail.html}` : undefined,
+        html: mail.html
+          ? `<p style="font-size:12px;color:#666">${note}</p>${sanitizeForwardedHtml(mail.html)}`
+          : undefined,
         text: `${note}\n\n${mail.text ?? ""}`,
         replyTo: { email: mail.from, name: mail.fromName ?? undefined },
         tags: ["relay"],

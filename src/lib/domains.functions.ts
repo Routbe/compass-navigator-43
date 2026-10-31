@@ -96,6 +96,10 @@ export const setDomainRootRedirect = createServerFn({ method: "POST" })
       url = validRootRedirectUrl(data.url);
       if (!url) throw new Error("Vul een geldige https://-link in.");
     }
+    // Custom-domain instellingen zijn een betaalde feature: net als de
+    // sibling-functies hierboven is een actief abonnement vereist.
+    const { assertEntitled } = await import("./entitlement.server");
+    await assertEntitled(context.userId); // deep-link / direct-RPC protection
     const { setRootRedirectFor } = await import("./domains.server");
     await setRootRedirectFor(context.userId, data.id, data.type, url);
     return { ok: true };

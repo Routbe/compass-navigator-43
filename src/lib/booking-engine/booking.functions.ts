@@ -47,7 +47,9 @@ export const createBooking = createServerFn({ method: "POST" })
       if (!r.ok) return r;
       const bookingId = r.bookingIds[0];
       if (!bookingId) return { ok: false as const, reason: "error" as const };
-      return { ok: true as const, bookingId, status: r.status, checkoutUrl: r.checkoutUrl };
+      const s = await import("./public.server");
+      const bookingToken = await s.bookingTokenFor(bookingId);
+      return { ok: true as const, bookingId, bookingToken, status: r.status, checkoutUrl: r.checkoutUrl };
     } catch (e) {
       console.error("[booking] create", e instanceof Error ? e.message : "error");
       return { ok: false as const, reason: "error" as const };
@@ -55,10 +57,12 @@ export const createBooking = createServerFn({ method: "POST" })
   });
 
 export const getBookingSummary = createServerFn({ method: "GET" })
-  .inputValidator((input: unknown) => z.object({ id: uuid }).parse(input))
+  .inputValidator((input: unknown) =>
+    z.object({ id: uuid, token: z.string().max(128).optional() }).parse(input),
+  )
   .handler(async ({ data }) => {
     const s = await import("./public.server");
-    return s.bookingSummary(data.id);
+    return s.bookingSummary(data.id, data.token ?? null);
   });
 
 // ---------- owner (studio) ----------

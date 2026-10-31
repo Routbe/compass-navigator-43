@@ -163,8 +163,11 @@ async function bunqCall<T>(
       response: parsed,
     };
     lastRunLog.push(entry);
+    // Nooit ruwe provider-payloads loggen: credentials en e-mailadressen
+    // worden eerst geredacteerd (security/redact.ts).
+    const { redactLogPayload } = await import("./security/redact");
     console.log(
-      `[bunq] ${step} → ${method} ${path} HTTP ${res.status}\n${JSON.stringify(parsed, null, 2)}`,
+      `[bunq] ${step} → ${method} ${path} HTTP ${res.status}\n${JSON.stringify(redactLogPayload(parsed), null, 2)}`,
     );
 
     if (!res.ok) {
